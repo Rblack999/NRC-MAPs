@@ -1,6 +1,5 @@
 # -*- coding: utf-8 -*-
 """
-@author: Blackr
 """
 
 # pylint: disable=too-many-lines,too-few-public-methods
