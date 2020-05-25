@@ -9,6 +9,8 @@ a .csv file with the appropriate I, Ewe, and time columns
 time = s
 I = mA
 E = V
+
+This is mostly used as a coding excerise for post processing. Re-evaluate when it is time to write more post-processing scripts
 """
 import pandas as pd
 import numpy as np
