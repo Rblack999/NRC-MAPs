@@ -38,7 +38,7 @@
 '''Currently have 32-bit vs. 64-bit interpreter problems with pandas library, so dump to .csv and use other to put into pandas database'''
 import time
 import numpy
-#import pandas
+import json
 from bio_logic import SP150, CA
 
 def run_ca():
@@ -82,7 +82,7 @@ def run_ca():
         # documentation for the technique.
         # If numpy is installed, the data can also be retrieved as
         # numpy arrays
-        # printing the values to follow for testing
+        # printing the values to follow for testing purposes only
         print('Time:', data_out.time_numpy)
         print('Ewe:', data_out.Ewe_numpy)
         print('I', data_out.I_numpy)
@@ -96,12 +96,18 @@ def run_ca():
         # Sleep
         time.sleep(0.1)
 
-    # dataframe of each variable
+    # final data
     df = (Time, Ewe, I, cycle)
 
     #Due to compatibility issues (because I am new at this, not a true problem), writing data to a .csv for importing into pandas
     # Note the order of header and the df as indicated
     numpy.savetxt("test.csv", numpy.transpose(df), delimiter=",", header = 'Time,Ewe,I,cycle', comments = '')
+
+    #Writing data to a json file
+    dict = {'Time':Time.tolist(),'Ewe':Ewe.tolist(),'I':I.tolist(),'cycle':cycle.tolist()}
+    with open('SP150_CA_espot.json', 'w') as json_file:
+        json.dump(dict, json_file)
+
 
     sp150.stop_channel(0)
     sp150.disconnect()
