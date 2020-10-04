@@ -10,9 +10,7 @@ import numpy as np
 from numpy import genfromtxt
 import matplotlib.pyplot as plt
 from scipy import stats
-
-
-
+from impedance import preprocessing
 
 '''
 #Below is a function to get the iR of the acquired impedance data
@@ -127,9 +125,9 @@ def tafel_fit(data):
         error_array[i] = std_err
         slope_array[i] = slope
         intercept_array[i] = intercept
-    print(f"Error Array = {error_array}")
-    print(f'Slope Array = {slope_array}')
-    print(f'Intercept = {intercept_array}')
+    print("Error Array = {}".format(error_array))
+    print('Slope Array = {}'.format(slope_array))
+    print('Intercept = {}'.format(intercept_array))
 
     #From these linear fits, choose the best std_error slope and intercept to fit to the rest of the data
     #and obtain the tafel_slope
@@ -141,9 +139,113 @@ def tafel_fit(data):
 
     plt.plot(current_values,fit_Ewe, linestyle = 'dashed')
     plt.scatter(current_values,Ewe_tafel)
-    plt.title(f'Tafel Slope = {str(round(slope_array[index][0], 3))} V/dec')
+    plt.title('Tafel Slope = {} V/dec'.format(str(round(slope_array[index][0], 3))))
     plt.ylabel('Ewe (V vs. NHE)')
     plt.xlabel('Log(I) (A)')
-    fig.text(0.15, 0.775, f'Tafel = {str(round(slope_array[index][0], 3))} V/dec \nstd-err = {str(round(error_array[index][0], 6))}', style='italic',
+    fig.text(0.15, 0.775, 'Tafel = {} V/dec \nstd-err = {}'.format(str(round(slope_array[index][0], 3)),str(round(error_array[index][0], 6))), style='italic',
             bbox={'facecolor': 'white', 'alpha': 0.5, 'pad': 5})
     plt.show()
+
+def EIS_fit(data):
+    #From data file rbnb2p86 - Characterization_Tafel_EIS_LowV_01_PEIS. Put here to use as raw data for evaluation. Keep this as comments for when need to test the script.
+    #frequencies = np.array([2.00e+05, 1.35e+05, 9.17e+04, 6.21e+04, 4.21e+04, 2.85e+04,
+           #1.93e+04, 1.31e+04, 8.86e+03, 6.00e+03, 4.06e+03, 2.75e+03,
+           #1.86e+03, 1.26e+03, 8.53e+02, 5.78e+02, 3.91e+02, 2.65e+02,
+           #1.79e+02, 1.22e+02, 8.23e+01, 5.57e+01, 3.77e+01, 2.56e+01,
+           #1.73e+01, 1.17e+01, 7.94e+00, 5.37e+00, 3.64e+00, 2.47e+00,
+           #1.67e+00, 1.13e+00, 7.66e-01, 5.19e-01, 3.51e-01, 2.38e-01,
+           #1.61e-01, 1.09e-01, 7.39e-02, 5.00e-02])
+
+    #time = np.array([  0.883,   1.3  ,   1.72 ,   2.14 ,   2.56 ,   2.98 ,   3.4  ,
+             #3.82 ,   4.26 ,   4.66 ,   5.13 ,   5.59 ,   6.05 ,   6.73 ,
+             #7.19 ,   7.66 ,   8.12 ,   8.58 ,   9.04 ,   9.5  ,   9.95 ,
+            #10.4  ,  10.9  ,  11.3  ,  11.7  ,  12.1  ,  12.7  ,  13.1  ,
+            #13.8  ,  15.1  ,  16.4  ,  18.3  ,  21.1  ,  25.2  ,  31.2  ,
+            #40.   ,  53.1  ,  72.5  , 101.   , 143.   ])
+
+    #abs_I = np.array([1.78e-04, 1.93e-04, 1.93e-04, 1.93e-04, 1.92e-04, 1.91e-04,
+           #1.88e-04, 1.87e-04, 1.87e-04, 1.95e-04, 1.99e-04, 2.01e-04,
+           #2.02e-04, 1.86e-04, 1.86e-04, 1.86e-04, 1.86e-04, 1.86e-04,
+           #1.86e-04, 1.85e-04, 1.85e-04, 1.84e-04, 1.84e-04, 1.83e-04,
+           #1.82e-04, 1.81e-04, 1.79e-04, 1.77e-04, 1.74e-04, 1.70e-04,
+           #1.63e-04, 1.55e-04, 1.42e-04, 1.24e-04, 1.05e-04, 8.78e-05,
+           #7.32e-05, 6.36e-05, 5.74e-05, 5.32e-05])
+
+    #abs_Ewe = np.array([0.00987, 0.0106 , 0.0106 , 0.0105 , 0.0105 , 0.0104 , 0.0102 ,
+           #0.0102 , 0.0101 , 0.0106 , 0.0108 , 0.0109 , 0.011  , 0.0101 ,
+           #0.0101 , 0.0101 , 0.0101 , 0.0101 , 0.0101 , 0.0101 , 0.0101 ,
+           #0.0101 , 0.0101 , 0.0101 , 0.0101 , 0.0101 , 0.0101 , 0.0101 ,
+           #0.0101 , 0.0101 , 0.0101 , 0.0102 , 0.0102 , 0.0101 , 0.0101 ,
+           #0.0101 , 0.0101 , 0.0101 , 0.0101 , 0.0101])
+
+    #Phase_Zwe = np.array([9.66e-01,  5.82e-01,  3.54e-01,  2.18e-01,  1.09e-01,  5.64e-02,
+            #2.13e-02, -1.58e-02, -5.64e-02, -3.74e-02, -8.84e-02, -8.33e-02,
+           #-1.01e-01, -1.24e-01, -1.81e-01, -1.85e-01, -3.01e-01, -3.38e-01,
+           #-5.66e-01, -6.64e-01, -9.18e-01, -1.15e+00, -1.55e+00, -1.98e+00,
+           #-2.55e+00, -3.30e+00, -4.33e+00, -5.64e+00, -7.39e+00, -9.94e+00,
+           #-1.33e+01, -1.79e+01, -2.20e+01, -2.61e+01, -2.83e+01, -2.75e+01,
+           #-2.49e+01, -2.11e+01, -1.75e+01, -1.45e+01])
+
+    #Below is pulling data from a .csv file
+    #Note that the data, in particular at high frequency, is quite messy!
+    data = genfromtxt(data, delimiter=',')
+    data = np.transpose(data)
+    frequencies = data[0]
+    abs_Ewe = data[12]
+    abs_I = data[13]
+    Phase_Zwe = data[4]
+
+    #For completeness sake, put into a dictionary
+    data = {'frequencies':frequencies.tolist(),'abs_Ewe':abs_Ewe.tolist(),'abs_I':abs_I.tolist(),'Phase_Zwe':Phase_Zwe.tolist()}
+
+    abs_Z = np.divide(data['abs_Ewe'], data['abs_I'])
+    Re_Z = abs_Z * (np.cos(np.radians(data['Phase_Zwe'])))
+    Im_Z = abs_Z * (np.sin(np.radians(data['Phase_Zwe'])))
+    #Convert Re_Z and Im_Z into a single complex numpy array
+    Z = Re_Z + 1j*Im_Z
+
+    #Below is built in library to cut frequencies below x-axis
+    frequencies, Z = preprocessing.ignoreBelowX(frequencies,Z)
+
+    from impedance.models.circuits import CustomCircuit
+    # A different circuit
+    circuit = 'R0-p(R1,CPE1)-p(R2,CPE2)'
+    initial_guess = [1000, 100, 1E-6, 0.7, 10, 0.1E-6, 0.6]
+
+    circuit = CustomCircuit(circuit, initial_guess=initial_guess)
+    print(circuit)
+
+    circuit.fit(frequencies,Z)
+
+    results = circuit.parameters_
+    R0 = results[0]
+    R1 = results[1]
+    R2 = results[4]
+    Q1 = results[2]
+    a1 = results[3]
+    Q2 = results[5]
+    a2 = results[6]
+    print(f'R0 = {R0} ohms')
+    print(f'R1 = {R1} ohms')
+    print(f'R2 = {R2} ohms')
+    print(f'Q1 = {Q1} F.s^(a-1)')
+    print(f'a1 = {a1}')
+    print(f'Q2 = {Q2} F.s^(a-1)')
+    print(f'a2 = {a2}')
+
+    Z_fit = circuit.predict(frequencies)
+
+    import matplotlib.pyplot as plt
+    from impedance.visualization import plot_nyquist
+
+    fig, ax = plt.subplots()
+    plot_nyquist(ax, Z, fmt='o')
+    plot_nyquist(ax, Z_fit, fmt='-')
+
+    plt.legend(['Data', 'Fit'])
+    plt.show()
+
+#Examples to run
+#iR = get_iR('C:\\Users\\Blackr\\Documents\\Data Main\\NRC-M MAPs\\Experimental\\rbnb2p107\\TestB\\TestB_Char_initial_EIS_C01.csv')
+#tafel_fit('C:\\Users\\Blackr\\Documents\\Data Main\\NRC-M MAPs\\Experimental\\rbnb2p107\\TestB\\TestB_Char_initial_Tafel_C01.csv')
+EIS_fit('C:\\Users\\Blackr\\Documents\\Data Main\\NRC-M MAPs\\Experimental\\rbnb2p107\\TestA_Char_AfterTafel_EISTafel_1d08_C01.csv')
