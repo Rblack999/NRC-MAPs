@@ -50,11 +50,11 @@ def get_iR(data):
     #Pull out the index of the smallest absolute value. This is to avoid the pulled min value (due to abs) reversing sign
      #and not found in the original data['Phase_Zwe']
     #global iR #Setting the value for iR to be saved to be able to use in other functions
-    df = genfromtxt(data, delimiter=',')
-    df = np.transpose(df)
-    index = [abs(i) for i in df[4]].index(min((abs(i)) for i in df[4]))
-    E_phase0 = df[12][index]
-    I_phase0 = df[13][index]
+    data = genfromtxt(data, delimiter=',')
+    data = np.transpose(data)
+    index = [abs(i) for i in data[4]].index(min((abs(i)) for i in data[4]))
+    E_phase0 = data[12][index]
+    I_phase0 = data[13][index]
     iR = E_phase0/I_phase0
     return iR
 
@@ -70,58 +70,74 @@ There is also scripts that can be uncommented to accept a .csv file of the as na
 Below is for reading in the data from a "noisy" .csv file. Can be commented out when working directly with the potentiostat
 """
 def tafel_fit(data):
-    #Below is just to read in the data as a pd dataframe for easy conversion and format the data.
-    #In the real script, data will exist and come in as a cleaner dictionary, although post-processing may be necessary
-    df = pd.read_csv(data)
-    #Drop columns that have all NaN (.csv problem?)
-    df.dropna(axis =1, how ='all', inplace = True)
+    l = 0.00035
+    t = -0.00005
+    # Below is just to read in the data as a pd dataframe for easy conversion and format the data.
+    data = genfromtxt(data, delimiter=',')
+    data = np.transpose(data)
+    time = data[7]
+    Ewe = data[9]
+    I = data[10]
 
-    #Determine what Ewe data is "stable" compared to transition noise and drop the "noise" data
-    df['Ewe'].value_counts()
-    #Explanation of how the code below works is here:
-    #https://stackoverflow.com/questions/34913546/remove-low-counts-from-pandas-data-frame-column-on-condition
-    s = df['Ewe'].value_counts()
-    df = df[df.isin(s.index[s >= 5]).values]
+    # The following "smooths" the data by removing small Ewe values equal to transitions (eg. during an Ewe change). This helps
+    # ensure that only stable Ewe are used for each tafel step
+    values = np.unique(Ewe)
+    for i in range(len(values)):
+        index = np.where(Ewe == values[i])
+        if index[0].shape[0] < 10:
+            time = np.delete(time, index)
+            Ewe = np.delete(Ewe, index)
+            I = np.delete(I, index)
+    values, counts = np.unique(Ewe, return_counts=True)
+    print(values)
+    print(counts)
 
-    #For testing purposes, put data into a dictionary. From the potentiostat the data will come in this form, with the dict.values()
-    #as numpy arrays
-    dict = {'time':np.array(df['time']),'Ewe':(np.array(df['Ewe'])),'I':(np.array(abs(df['I'])/1000))} #Note unit conversions to put I = A and V = V vs. NHE
-    plt.plot(dict['time'],dict['I'])
+    # For testing purposes, put data into a dictionary. From the potentiostat the data will come in this form, with the dict.values()
+    # as numpy arrays
+    dict = {'time': np.array(time), 'Ewe': np.array(Ewe),
+            'I': (np.array(abs(I) / 1000))}  # Note unit conversions to put I = A
+    plt.plot(dict['time'], dict['I'])
+    plt.ylim(0, 0.00005)
     plt.show()
 
-    #This is only to ensure the data is clean
-    #In the future when only working with np arrays, try something like this:
-    #np.unique(a[1], return_counts = True)
-    np.unique(dict['Ewe'], return_counts = True)
+    # The following is only to ensure the data is clean, from a visual perspective. There should be distinct Ewe evenly spaced.
+    # In the future when only working with np arrays, try something like this:
+    # np.unique(a[1], return_counts = True)
+    np.unique(dict['Ewe'], return_counts=True)
+    # print(np.unique(dict['Ewe'], return_counts = True))
+    # Make a matrix of the three keys for post processing
+    a = np.array([dict['time'], dict['Ewe'], dict['I']])  # a[0] = time, a[1] = Ewe, a[2] = I
 
-    #Make a matrix of the three keys for post processing
-    a = np.array([dict['time'],dict['Ewe'],dict['I']])  #a[0] = time, a[1] = Ewe, a[2] = I
-
-    #The following is a for loop to determine the last value of each Ewe step from the array
-    #Use np.where to obtain the column index of for which the Ewe = given value
-    #Use this array to index out the appropriate I, choosing the last value to remove any capacitive current capture
-    #Make new array with the latest I, with appropriate corresponding E
-
-    current_values = np.zeros(len(np.unique(a[1]))) #empty array to populate based on size of unique values of Ewe
+    current_values = np.zeros(len(np.unique(a[1])))  # empty array to populate based on size of unique values of Ewe
+    time_values = np.zeros(len(np.unique(a[1])))  # Delete this, for investigation purposes
     for i in range(len(current_values)):
-        index = np.where(a[1] == np.unique(a[1])[i]) #For each value of Ewe == to unique Ewe, gives index
-        current_values[i] = a[2][index][-5] #Set the corresponding np.zero array to the last(ish) value of current
-    current_values = np.log10(current_values) #Convert to log scale
-    Ewe_tafel = np.unique(a[1]) #Make this a variable for next sections
+        index = np.where(a[1] == np.unique(a[1])[i])  # For each value of Ewe == to unique Ewe, gives index
+        current_values[i] = abs(
+            np.median(a[2][index][2:]))  # Set the corresponding np.zero array to the last(ish) value of current
+        time_values[i] = np.median(a[0][index][2:])
+        # current_values[i] = np.mean(a[2][index])
+    plt.scatter(time_values, current_values, color='red')
+    plt.plot(dict['time'], dict['I'])
+    plt.ylim(t, l)
+    plt.title('Median')
+    plt.show()
+    print(current_values)
+    current_values = np.log10(current_values)  # Convert to log scale
+    Ewe_tafel = np.unique(a[1])  # Make this a variable for next sections
 
     '''Add in some IR correction at this stage, have it link back to previous function'''
     '''Add information about the pH to adjust for Ewe'''
-    #Next step we do iR and environment corrections
-    #ir = 30 #Note this should link to previous function
-    Ewe_tafel = Ewe_tafel+.197-(iR*(10**current_values))
+    # Next step we do iR and environment corrections
+    # ir = 30 #Note this should link to previous function
+    Ewe_tafel = Ewe_tafel + .197 - (iR * (10 ** current_values))
 
-    #The next steps are to iterate over 5 data points to find the best curve fit
-    #Use scipy.stats linregressand use std.err to evaluate the best fit
-    error_array = np.zeros(len(current_values)-4) #Note -5 because will be using 5 points at a time for analysis
-    slope_array = np.zeros(len(current_values)-4)
-    intercept_array = np.zeros(len(current_values)-4)
-    for i in range(len(current_values)-4):
-        slope, intercept, r_value, p_value, std_err = stats.linregress(current_values[i:i+5],Ewe_tafel[i:i+5])
+    # The next steps are to iterate over 5 data points to find the best curve fit
+    # Use scipy.stats linregressand use std.err to evaluate the best fit
+    error_array = np.zeros(len(current_values) - 4)  # Note -5 because will be using 5 points at a time for analysis
+    slope_array = np.zeros(len(current_values) - 4)
+    intercept_array = np.zeros(len(current_values) - 4)
+    for i in range(len(current_values) - 4):
+        slope, intercept, r_value, p_value, std_err = stats.linregress(current_values[i:i + 5], Ewe_tafel[i:i + 5])
         error_array[i] = std_err
         slope_array[i] = slope
         intercept_array[i] = intercept
@@ -129,21 +145,23 @@ def tafel_fit(data):
     print('Slope Array = {}'.format(slope_array))
     print('Intercept = {}'.format(intercept_array))
 
-    #From these linear fits, choose the best std_error slope and intercept to fit to the rest of the data
-    #and obtain the tafel_slope
-    index = np.where(error_array == np.min(error_array)) #Get the index of the lowest std_error
-    fit_Ewe = slope_array[index]*current_values+intercept_array[index] #Get the fit values for curve
+    # From these linear fits, choose the best std_error slope and intercept to fit to the rest of the data
+    # and obtain the tafel_slope
+    index = np.where(error_array == np.min(error_array))  # Get the index of the lowest std_error
+    fit_Ewe = slope_array[index] * current_values + intercept_array[index]  # Get the fit values for curve
 
-    #The following makes the final plot
+    # The following makes the final plot
     fig = plt.figure()
 
-    plt.plot(current_values,fit_Ewe, linestyle = 'dashed')
-    plt.scatter(current_values,Ewe_tafel)
+    plt.plot(current_values, fit_Ewe, linestyle='dashed')
+    plt.scatter(current_values, Ewe_tafel)
     plt.title('Tafel Slope = {} V/dec'.format(str(round(slope_array[index][0], 3))))
     plt.ylabel('Ewe (V vs. NHE)')
     plt.xlabel('Log(I) (A)')
-    fig.text(0.15, 0.775, 'Tafel = {} V/dec \nstd-err = {}'.format(str(round(slope_array[index][0], 3)),str(round(error_array[index][0], 6))), style='italic',
-            bbox={'facecolor': 'white', 'alpha': 0.5, 'pad': 5})
+    fig.text(0.15, 0.775, 'Tafel = {} V/dec \nstd-err = {}'.format(str(round(slope_array[index][0], 3)),
+                                                                   str(round(error_array[index][0], 6))),
+             style='italic',
+             bbox={'facecolor': 'white', 'alpha': 0.5, 'pad': 5})
     plt.show()
 
 def EIS_fit(data):
@@ -209,6 +227,43 @@ def EIS_fit(data):
 
     from impedance.models.circuits import CustomCircuit
     # A different circuit
+    circuit = 'R0-p(R1,CPE1-p(R2,CPE2))'
+    initial_guess = [1000, 100, 1E-6, 0.7, 10, 0.1E-6, 0.6]
+
+    circuit = CustomCircuit(circuit, initial_guess=initial_guess)
+    print(circuit)
+
+    circuit.fit(frequencies, Z)
+
+    results = circuit.parameters_
+    R0 = results[0]
+    R1 = results[1]
+    R2 = results[4]
+    Q1 = results[2]
+    a1 = results[3]
+    Q2 = results[5]
+    a2 = results[6]
+    print(f'R0 = {R0} ohms')
+    print(f'R1 = {R1} ohms')
+    print(f'R2 = {R2} ohms')
+    print(f'Q1 = {Q1} F.s^(a-1)')
+    print(f'a1 = {a1}')
+    print(f'Q2 = {Q2} F.s^(a-1)')
+    print(f'a2 = {a2}')
+
+    Z_fit = circuit.predict(frequencies)
+
+    import matplotlib.pyplot as plt
+    from impedance.visualization import plot_nyquist
+
+    fig, ax = plt.subplots()
+    plot_nyquist(ax, Z, fmt='o')
+    plot_nyquist(ax, Z_fit, fmt='-')
+
+    plt.legend(['Data', 'Fit'])
+    plt.show()
+
+    # A different circuit
     circuit = 'R0-p(R1,CPE1)-p(R2,CPE2)'
     initial_guess = [1000, 100, 1E-6, 0.7, 10, 0.1E-6, 0.6]
 
@@ -245,7 +300,42 @@ def EIS_fit(data):
     plt.legend(['Data', 'Fit'])
     plt.show()
 
+def lsv_oer(data):
+    area = 1
+    pH = 7
+    data = np.genfromtxt(data, dtype = 'float',delimiter=',')
+    data = np.transpose(data)
+    time = data[4] #units of s
+    Ewe = data[6] #units of V vs. Ag/AgCl
+    I = data[7] #currently in units of mA
+    dict = {'time': np.array(time), 'Ewe': np.array(Ewe),
+                'I': (np.array(abs(I) / 1000))}    #Put into dictionary for consistency with rest of post-processing
+
+    #The following are corrections to the data
+    dict['Ewe'] = dict['Ewe']+.197-(iR*dict['I']) # NHE conversion + iR correction
+    dict['I'] = dict['I']/area # Correction for planar surface area
+    dict['nu'] = dict['Ewe']-(1.23-(0.059*7)) # Overpotential added for pH correction
+
+    #The following determines the Ewe and overpotential for 1 mA/cm2
+    diff = abs(.001-dict['I'])
+    index = np.where(diff == diff.min())
+    print(dict['Ewe'][index])
+    print(dict['nu'][index])
+    a = float(dict['Ewe'][index]) #for plotting textbox purposes only
+    b = float(dict['nu'][index])  #for plotting textbox purposes only
+
+    fig = plt.figure()
+    fig.text(0.15, 0.775, '1 mA/cm2 Ewe = {} V vs. NHE \nnu = {} V vs. NHE'.format(str(round(a,3)),str(round(b,3))), style='italic',
+                bbox={'facecolor': 'white', 'alpha': 0.5, 'pad': 5})
+    plt.plot(dict['Ewe'],(dict['I']*1000)) #for plot put current in mA
+    plt.scatter(dict['Ewe'][index],(dict['I'][index]*1000), color = 'red') #for plot put current in mA
+    plt.xlabel('E vs. NHE (V)')
+    plt.ylabel('I (mA/cm2')
+    plt.show()
+
 #Examples to run
-#iR = get_iR('C:\\Users\\Blackr\\Documents\\Data Main\\NRC-M MAPs\\Experimental\\rbnb2p107\\TestB\\TestB_Char_initial_EIS_C01.csv')
-#tafel_fit('C:\\Users\\Blackr\\Documents\\Data Main\\NRC-M MAPs\\Experimental\\rbnb2p107\\TestB\\TestB_Char_initial_Tafel_C01.csv')
-EIS_fit('C:\\Users\\Blackr\\Documents\\Data Main\\NRC-M MAPs\\Experimental\\rbnb2p107\\TestA_Char_AfterTafel_EISTafel_1d08_C01.csv')
+iR = get_iR('C:\\Users\\Blackr\\Documents\\Data Main\\NRC-M MAPs\\Experimental\\rbnb2p107\\TestB\\TestB_Char_initial_EIS_C01.csv')
+#tafel_fit('C:\\Users\\Blackr\\Documents\\Data Main\\NRC-M MAPs\\Experimental\\rbnb2p111\\TestB_Char_LaterTafel_EIS_LSV_NoStir_NoWires_01_CA_C01.csv')
+#EIS_fit('C:\\Users\\Blackr\\Documents\\Data Main\\NRC-M MAPs\\Experimental\\rbnb2p111\\TestA_Char_LaterTafel_EIS_LSV_HighStir_NoWires_03_PEIS_C01.csv')
+lsv_oer('C:\\Users\\Blackr\\Documents\\Data Main\\NRC-M MAPs\\Experimental\\rbnb2p111\\test.csv')
+
