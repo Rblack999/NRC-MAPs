@@ -4,17 +4,10 @@ import time
 import io
 from new_era.peristaltic_pump_network import PeristalticPumpNetwork
 
-#these will go to main - putting them here for now:
-pump_port = 'COM5'  # check on your own system
-pump_network = PeristalticPumpNetwork(port=pump_port, baudrate=9600)
-pump = pump_network.add_pump(address=0, baudrate=9600)  # only one pump is used for this project
-
 def start_pump():
-    
     pump.start()
 
 def stop_pump():
-    
     pump.stop()
 
 def change_direction(direction):
