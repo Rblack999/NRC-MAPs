@@ -1,6 +1,8 @@
 import serial
 import time
 
+stepper_slider_port = serial.Serial('COM9',115200) 
+
 def receiving():
     while stepper_slider_port.inWaiting() >0:
         line = stepper_slider_port.read_until().decode().rstrip()
