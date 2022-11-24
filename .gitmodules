@@ -1,0 +1,3 @@
+[submodule "CCUS/sierra_mfc_controller"]
+	path = CCUS/sierra_mfc_controller
+	url = https://github.com/patrickcgray/sierra_mfc_controller
