@@ -57,15 +57,18 @@ class ActiveLearning:
         # Initialize the X-tensor and determine the first experiment, to be used only for the very first test
         # This is for making the true X_Sample tensor:
         # As is, makes the x-matrix for 4 elements, can easily add more as necessary
-        delete_me = np.array([0,0,0]) # Need to just make a dummy matrix first of the row number of columns
-        a1 = np.round(np.linspace(0.1,1,num = 5), decimals = 1)
-        a2 = np.round(np.linspace(-0.5,0.5,num = 11), decimals = 1)
-        a3 = np.round(np.linspace(5,60,num = 11), decimals = 1) 
+        delete_me = np.array([0,0,0,0]) # Need to just make a dummy matrix first of the row number of columns
+        a1 = np.round(np.linspace(0,1,num = 11), decimals = 1)
+        a2 = np.round(np.linspace(0,1,num = 11), decimals = 1)
+        a3 = np.round(np.linspace(0,1,num = 11), decimals = 1)
+        a4 = np.round(np.linspace(0,1,num = 11), decimals = 1)   
         for i in a1:
             for j in a2:
                 for k in a3:
-                    add = np.array([i,j,k])
-                    delete_me = np.vstack((delete_me,add))
+                    for l in a4:
+                        if i+j+k+l == 1.0:
+                            add = np.array([i,j,k,l])
+                            delete_me = np.vstack((delete_me,add))
         X_matrix = np.delete(delete_me, (0), axis=0)
         X_matrix = torch.tensor(X_matrix)
         
@@ -88,66 +91,6 @@ class ActiveLearning:
         dict[f'{self.experiment_name}'][f'Test_{self.exp_count}']['AL']['test_inds'] = test_inds
 
         # Save to pickle file:
-        with open(f'{self.root_path}{self.experiment_name}_saved_data.pkl', 'wb') as f:
-            pickle.dump(dict, f)
-
-    def determine_next_experiment_random(self, dict):
-
-        # First import the current indices to be able to use:
-        # Note - will need to import the previous test indexes as that is where they are stored from initial
-        # determine_first_experiment and then all subsequent experiments index data will be at Test_(n - 1)
-        # Note cannot just remake them or will lose all information
-        # Want to do something where we populate the correct information first into the correct test?
-        
-        if self.exp_count == 0:
-        
-            total_indexes = dict[f'{self.experiment_name}'][f'Test_{self.exp_count}']['AL']['total_indexes']
-            train_inds = dict[f'{self.experiment_name}'][f'Test_{self.exp_count}']['AL']['train_inds']
-            test_inds = dict[f'{self.experiment_name}'][f'Test_{self.exp_count}']['AL']['test_inds']
-
-        else:
-
-            total_indexes = dict[f'{self.experiment_name}'][f'Test_{self.exp_count-1}']['AL']['total_indexes']
-            train_inds = dict[f'{self.experiment_name}'][f'Test_{self.exp_count-1}']['AL']['train_inds']
-            test_inds = dict[f'{self.experiment_name}'][f'Test_{self.exp_count-1}']['AL']['test_inds']
-
-        # import the latest X_sample (X_chosen) matrix, note this will also be stored in the previous Test_(n-1)  
-        if self.exp_count == 0:
-
-            X_samples = np.array(dict[f'{self.experiment_name}'][f'Test_{self.exp_count}']['AL']['X_sample'])
-
-        else:
-
-            X_samples = np.array(dict[f'{self.experiment_name}'][f'Test_{self.exp_count-1}']['AL']['X_sample'])
-
-        print(f'the previous X_samples matrix imported and is currently active is {X_samples}')
-
-        # Need to convert X_samples into a tensor
-        init_x = torch.tensor(X_samples)
-
-        # Now grab a new set of experiments from the available X_matrix, indexed to the available selections remaining from test_inds. Note indexing from original
-        # X_Matrix at exp_count = 0
-        X_matrix = np.array(dict[f'{self.experiment_name}'][f'Test_0']['AL']['X_matrix'])[test_inds]
-        X_matrix = torch.tensor(X_matrix)
-        random_indices = np.random.choice(X_matrix.shape[0], size=1, replace=False)
-        print(f'This is the random index chosen for this run = {random_indices}')
-        candidates = X_matrix[random_indices]
-
-        # Update dictionary for newly selected X_samples
-        dict[f'{self.experiment_name}'][f'Test_{self.exp_count}']['AL']['X_sample'] = torch.cat((init_x,candidates),0)
-
-        # Now update all dictionaries and indexes accordingly, storing correctly in the appropriate experimental dictionary 
-        print(f"New candidates composition to be added to trainset: {X_matrix[random_indices]}")
-       
-        #adding the new data point to train set for the next round
-        train_inds = np.append(train_inds, random_indices)
-        test_inds = [k for k in total_indexes if not k in train_inds]
-
-        # Update the dicitonaries accordingly
-        dict[f'{self.experiment_name}'][f'Test_{self.exp_count}']['AL']['total_indexes']=total_indexes
-        dict[f'{self.experiment_name}'][f'Test_{self.exp_count}']['AL']['train_inds']=train_inds
-        dict[f'{self.experiment_name}'][f'Test_{self.exp_count}']['AL']['test_inds']=test_inds
-
         with open(f'{self.root_path}{self.experiment_name}_saved_data.pkl', 'wb') as f:
             pickle.dump(dict, f)
 
@@ -301,3 +244,29 @@ class ActiveLearning:
         # and the y metric is obtained
         with open(f'{self.root_path}{self.experiment_name}_saved_data.pkl', 'wb') as f:
             pickle.dump(dict, f)
+
+    def determine_next_experiment_random(self, dict):
+
+        if self.exp_count == 0:
+        
+            total_indexes = dict[f'{self.experiment_name}'][f'Test_{self.exp_count}']['AL']['total_indexes']
+            train_inds = dict[f'{self.experiment_name}'][f'Test_{self.exp_count}']['AL']['train_inds']
+            test_inds = dict[f'{self.experiment_name}'][f'Test_{self.exp_count}']['AL']['test_inds']
+
+        else:
+
+            total_indexes = dict[f'{self.experiment_name}'][f'Test_{self.exp_count-1}']['AL']['total_indexes']
+            train_inds = dict[f'{self.experiment_name}'][f'Test_{self.exp_count-1}']['AL']['train_inds']
+            test_inds = dict[f'{self.experiment_name}'][f'Test_{self.exp_count-1}']['AL']['test_inds']
+
+        # import the latest X_sample (X_chosen) matrix, note this will also be stored in the previous Test_(n-1)  
+        if self.exp_count == 0:
+
+            X_samples = np.array(dict[f'{self.experiment_name}'][f'Test_{self.exp_count}']['AL']['X_sample'])
+
+        else:
+
+            X_samples = np.array(dict[f'{self.experiment_name}'][f'Test_{self.exp_count-1}']['AL']['X_sample'])
+
+        # print so can see what composition will be used
+        print(f'Composition Random = {X_samples}')
