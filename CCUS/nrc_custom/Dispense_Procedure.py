@@ -1,18 +1,10 @@
-# Seem to have a big problem when putting the dispense class as an external library and 'c9' not being defined. 
-# Calling the class here seems fine, but as an external library, run into the problem????
-# **********************************************************************************************
-# Define statements
+from north_c9 import NorthC9
+import time
 
-CAROUSEL_ROT = 4 # rotary
-CAROUSEL_Z = 6 # elevationt
-# **********************************  FLUID DISPENSATION FUNCTIONS END ****************************************
-
-# **********************************************************************************************
-# Class 
 class DispenseProcedure:
     # **********************************************************************************************
     # Constructor definition
-    def __init__(self,pumpnum,target_wgt,carouselsink,carouseldump, c9): #c9 has to be a variable so the actual c9 object can be used as part of the class functions
+    def __init__(self,pumpnum,target_wgt,carouselsink,carouseldump, c9):
         
         self.pumpnum = pumpnum # 9
         self.target_wgt = target_wgt
@@ -34,6 +26,9 @@ class DispenseProcedure:
         #self.z_mm = z_mm
         #self.vel = vel
         #self.accel = accel
+
+        CAROUSEL_ROT = 4 # rotary
+        CAROUSEL_Z = 6 # elevationt
         
         if ((rot_deg > 330) or (z_mm > 160)):
             return
@@ -79,7 +74,7 @@ class DispenseProcedure:
 #         pass
 
 # **********************************************************************************************
-    def prime_pumps(self):
+    def prime_pumps(self,p1):
         # pos represents the position of the carousel dispenser from 1 to 7
         p1.set_carousel_port(p1.carouseldump) 
 
@@ -99,7 +94,7 @@ class DispenseProcedure:
 
         # suck up X ml from vial
         self.c9.delay(5)
-        self.c9.aspirate_ml(p1.pumpnum,1) # 1 was 0.5
+        self.c9.aspirate_ml(p1.pumpnum,0.5) # 1 was 0.5
         self.c9.delay(15) # almost certainly need this delay for the fluid to be sucked up fully with the negative pump pressure
 
         # set the pump and switch the valve to the dispense position
@@ -107,14 +102,14 @@ class DispenseProcedure:
 
         # dispense X ml from vial
         self.c9.delay(5)
-        self.c9.dispense_ml(p1.pumpnum,1)
+        self.c9.dispense_ml(p1.pumpnum,0.5)
         self.c9.delay(15) # need this delay as there are still some drops falling as the tube dispenses the fluid with positive pump pressure
 
         # set the pump and switch the valve back to default valve position
         self.c9.set_pump_valve(p1.pumpnum,0)
         self.c9.delay(5)
         
-    def catalyst_procedure(self, dispense_num):
+    def catalyst_procedure(self, dispense_num,p1):
         # Move Carousel to position where it will Dispense into Vial
         # dispense_num is for tracking and recording the weights
         p1.set_carousel_port(p1.carouselsink)
@@ -128,8 +123,8 @@ class DispenseProcedure:
         self.c9.delay(5)
 
         # suck up X ml from source
-        self.c9.aspirate_ml(p1.pumpnum,1) # 1 was 0.5
-        self.c9.delay(2) # almost certainly need this delay for the fluid to be sucked up fully with the negative pump pressure
+        self.c9.aspirate_ml(p1.pumpnum,0.5) # 1 was 0.5
+        self.c9.delay(10) # almost certainly need this delay for the fluid to be sucked up fully with the negative pump pressure
         # set the pump and switch the valve to the dispense position
         self.c9.set_pump_valve(p1.pumpnum,1)
         self.c9.delay(2)
@@ -138,8 +133,10 @@ class DispenseProcedure:
 
         # Zero the weight scale with the empty vial
         # We are about to measure (by weight) how much liquid we have dispensed  
+        #Alex added 5 sec of sleep before and after due to packet error
+        time.sleep(5)
         p1.zero_weigh_scale()
-
+        time.sleep(10)
         # -------------------------------------------------------------
         # Measuring weight of (incrementally) dispensed fluid on mass balance in a closed feedback loop manner till it hits the weight target.
         # Dispensation quantity of fluid from the pump is stepped down as mass balance approaches its target of 0.050 mL.
@@ -187,15 +184,15 @@ class DispenseProcedure:
                 self.c9.set_pump_valve(p1.pumpnum,0)
 
                 # suck up X ml from source
-                self.c9.aspirate_ml(p1.pumpnum, 1) # fill full cylinder #was 1 now 0.5
-                self.c9.delay(5) # almost certainly need this delay for the fluid to be sucked up fully with the negative pump pressure
+                self.c9.aspirate_ml(p1.pumpnum, 0.5) # fill full cylinder #was 1 now 0.5
+                self.c9.delay(10) # almost certainly need this delay for the fluid to be sucked up fully with the negative pump pressure
 
                 # move carousel back over vial
                 p1.set_carousel_port(p1.carouselsink)
 
                 # return back to dispensing valve position
                 self.c9.delay(5)
-                self.c9.set_pump_valve(p1.pumpnum,0) 
+                self.c9.set_pump_valve(p1.pumpnum,1) 
                 self.c9.delay(5)            
 
                 addon_disp = 0 # reset the adddon_disp variable since we have filled up the cylinder to 100%
@@ -220,7 +217,7 @@ class DispenseProcedure:
 
         # Perform the dump of fluid into the fluid dump receiptical.
         self.c9.home_pump(p1.pumpnum)
-        self.c9.delay(3)
+        self.c9.delay(5)
 
         # --------------------------------------------------------------------
 
