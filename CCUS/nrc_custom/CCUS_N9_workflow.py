@@ -10,13 +10,25 @@ import asyncio
 from alicat import FlowController
 
 class N9_Workflow: 
-    def __init__(self, c9, root_path,experiment_name,exp_count, com_port_Ecell, depo_flow_controller_com_port):
+    def __init__(self, 
+                 c9, 
+                 root_path: str,
+                 experiment_name: str,
+                 exp_count: int, 
+                 dispense_concentration: int, 
+                 com_port_Ecell: str, 
+                 depo_flow_controller_com_port: str):
+        
         self.root_path = root_path
         self.experiment_name = experiment_name
         self.exp_count = exp_count
         self.c9 = c9
         self.com_port_Ecell = com_port_Ecell
         self.depo_flow_controller_com_port = depo_flow_controller_com_port
+        self.dispense_concentration = dispense_concentration
+        
+        if type(self.dispense_concentration) != int:
+                raise TypeError('dispense_concentration must be an integer')
 
     def homing_procedure(self):
 
@@ -79,8 +91,19 @@ class N9_Workflow:
         #Declare deposition cell stepper slider
         depo = ECell("deposition", f'{self.com_port_Ecell}')
         depo.cell_open()
-        print("you have 30s to load depo")
-        time.sleep(30)
+
+        while True:
+
+            user_input = input("Is cell loaded? Type 'continue' to proceed: ")
+
+            if user_input.lower() == 'continue':
+
+                break
+
+            else:
+
+                print("You need to type 'continue' to proceed.")
+
         depo.cell_close_slide()
         depo.disconnect()
     
@@ -88,24 +111,58 @@ class N9_Workflow:
         #Declare deposition cell stepper slider
         char = ECell("characterization", f'{self.com_port_Ecell}')
         char.cell_open()
-        print("you have 30s to load char")
-        time.sleep(30)
+       
+        while True:
+
+            user_input = input("Is cell loaded? Type 'continue' to proceed: ")
+
+            if user_input.lower() == 'continue':
+
+                break
+
+            else:
+
+                print("You need to type 'continue' to proceed.")
+        
         char.cell_close_slide()
         char.disconnect()
 
     def remove_char(self):
         #Declare deposition cell stepper slider
         char = ECell("characterization", f'{self.com_port_Ecell}')
-        print("remove remaining solution please")
-        time.sleep(30)
+        
+        while True:
+
+            user_input = input("Remove solution in cell - Type 'continue' to proceed: ")
+
+            if user_input.lower() == 'continue':
+
+                break
+
+            else:
+
+                print("You need to type 'continue' to proceed.")
+        
         char.cell_open()
+        time.sleep(5)
         char.disconnect()
     
     def remove_depo(self):
         #Declare deposition cell stepper slider
         depo = ECell("deposition", f'{self.com_port_Ecell}')
-        print("remove remaining solution please")
-        time.sleep(5)
+       
+        while True:
+
+            user_input = input("Remove solution in cell - Type 'continue' to proceed: ")
+
+            if user_input.lower() == 'continue':
+
+                break
+
+            else:
+
+                print("You need to type 'continue' to proceed.")
+
         depo.cell_open()
         time.sleep(5)
         depo.disconnect()
@@ -135,20 +192,20 @@ class N9_Workflow:
         p1.home_carousel_axis()  # Initial homing of the carousel
 
         px = []
-        px.append(DispenseProcedure(4, 2, 1, 0, self.c9))
+        px.append(DispenseProcedure(4, self.dispense_concentration, 1, 0, self.c9))
 
         for dispense_num in range(len(px)):  # must match the above
             print("\n\n*** Pump usage : " + str(dispense_num + 100))
             p1 = px[dispense_num]
-        #    if X_choice[dispense_num] == 0:
-        #        pass
+            if X_choice[dispense_num] == 0:
+               pass
             p1.catalyst_procedure(dispense_num)
             time.sleep(2)
 
         p1.home_carousel_axis()
         self.c9.delay(5)
 
-        N9_Workflow.load_depo()
+        self.load_depo()
         print("Closing deposition cell")
         time.sleep(5)
         print("deposition cell closed")
@@ -239,7 +296,7 @@ class N9_Workflow:
         self.c9.delay(5)
 
         #open deposition cell
-        N9_Workflow.load_depo()
+        self.load_depo()
         print("deposition cell open")
 
         #Pipette removal procedures
