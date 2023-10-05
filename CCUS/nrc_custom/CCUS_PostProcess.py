@@ -179,8 +179,7 @@ class PostProcessing:
             loaded_data = pickle.load(file)
         
         # define the scan_rate and make other dummy variables to be updated
-        # scan_rate = np.array([0.025,0.05,0.075,0.100,0.125,.150])
-        scan_rate = np.array([0.025,0.05,0.100,0.125,.150])
+        scan_rate = np.array([0.025,0.05,0.075,0.100,0.125,.150])
         ESCA_current_positive = np.zeros(len(scan_rate))
         ESCA_current_negative = np.zeros(len(scan_rate))
         ESCA_current_positive_baseline = np.zeros(len(scan_rate))
@@ -188,13 +187,12 @@ class PostProcessing:
         ESCA_current_positive_std = np.zeros(len(scan_rate))
         ESCA_current_negative_std = np.zeros(len(scan_rate))
 
-        #for i,j in enumerate([4,5,6,7,8,9]): # This can be adjusted based no the number of scan_rates used, note did not use the first CV
-        for i,j in enumerate([4,5,7,8,9]): # This can be adjusted based no the number of scan_rates used, note did not use the first CV
+        for i,j in enumerate([4,5,6,7,8,9]): # This can be adjusted based no the number of scan_rates used, note did not use the first CV
             Ewe_array = np.array(loaded_data[f'{self.experiment_name}'][f'{self.test}']['Char'][f'CV_{j}']['Ewe(V)'])
             current_array = np.array(loaded_data[f'{self.experiment_name}'][f'{self.test}']['Char'][f'CV_{j}']['I(A)'])
             cycle_array = np.array(loaded_data[f'{self.experiment_name}'][f'{self.test}']['Char'][f'CV_{j}']['Cycle'])
 
-            # Find the indices for where Ewe ~-0.1V, noting the threshold value used to find something 'close enough'
+            # Find the indices for where Ewe ~-0.1V, noting the threshold value used to find something ~-0.1
             target_value = -0.1
             threshold = 0.005
             indices = np.where(np.abs(Ewe_array - target_value) <= threshold)[0]
@@ -253,7 +251,7 @@ class PostProcessing:
         
         #plot the ESCA data
         plt.scatter(scan_rate,ESCA_current_positive_baseline,label = 'positive I')
-        plt.scatter(scan_rate,ESCA_current_negative_baseline,label = 'negative I')
+        plt.scatter(scan_rate,-ESCA_current_negative_baseline,label = 'negative I')
         plt.plot(scan_rate,ESCA_positive*scan_rate + intercept_positive)
         plt.plot(scan_rate,ESCA_negative*scan_rate + intercept_negative)
         plt.xlabel('Scan Rate (V/s)')
@@ -317,8 +315,8 @@ class PostProcessing:
         # Update the new experimental parameters in depo.json and the pump parameters
         # Assume X_sample matric is set ip as [0] = Au[], [1] = voltage, [2] = time
         # Update the 
-        depo_json['Runs'][0]['Techniques'][1]['params']['voltage_step'] = X_choice[1]
-        depo_json['Runs'][0]['Techniques'][1]['params']['duration_step'] = X_choice[2]
+        depo_json['Runs'][0]['Techniques'][2]['params']['voltage_step'] = [X_choice[1]]
+        depo_json['Runs'][0]['Techniques'][2]['params']['duration_step'] = [X_choice[2]]
 
         #To update the pump. global variable should have it carry-over into the main text:
         # global px

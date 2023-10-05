@@ -3,7 +3,7 @@ from north_c9 import NorthC9
 from ftdi_serial import Serial
 from nrc_custom.Ecell_package import ECell
 from nrc_custom.Dispense_Procedure import DispenseProcedure
-#from PStatRun import pstat_run
+from nrc_custom.PStatRun import pstat_run
 import time
 import json
 import asyncio
@@ -14,8 +14,8 @@ class N9_Workflow:
                  c9, 
                  root_path: str,
                  experiment_name: str,
-                 exp_count: int, 
-                 dispense_concentration: int, 
+                 exp_count, 
+                 dispense_concentration: float, 
                  com_port_Ecell: str, 
                  depo_flow_controller_com_port: str):
         
@@ -27,8 +27,8 @@ class N9_Workflow:
         self.depo_flow_controller_com_port = depo_flow_controller_com_port
         self.dispense_concentration = dispense_concentration
         
-        if type(self.dispense_concentration) != int:
-                raise TypeError('dispense_concentration must be an integer')
+        if type(self.dispense_concentration) != float:
+                raise TypeError('dispense_concentration must be a float')
 
     def homing_procedure(self):
 
@@ -76,20 +76,20 @@ class N9_Workflow:
         self.open_char()
     
     def open_depo(self):
-        depo = ECell("deposition", f'{self.com_port_Ecell}')
+        depo = ECell("characterization", f'{self.com_port_Ecell}')
         depo.cell_open()
         time.sleep(7)
         depo.disconnect
     
     def open_char(self):
-        depo = ECell("characterization", f'{self.com_port_Ecell}')
+        depo = ECell("deposition", f'{self.com_port_Ecell}')
         depo.cell_open()
         time.sleep(7)
         depo.disconnect
     
     def load_depo(self):
         #Declare deposition cell stepper slider
-        depo = ECell("deposition", f'{self.com_port_Ecell}')
+        depo = ECell("characterization", f'{self.com_port_Ecell}')
         depo.cell_open()
 
         while True:
@@ -109,7 +109,7 @@ class N9_Workflow:
     
     def load_char(self):
         #Declare deposition cell stepper slider
-        char = ECell("characterization", f'{self.com_port_Ecell}')
+        char = ECell("deposition", f'{self.com_port_Ecell}')
         char.cell_open()
        
         while True:
@@ -129,7 +129,7 @@ class N9_Workflow:
 
     def remove_char(self):
         #Declare deposition cell stepper slider
-        char = ECell("characterization", f'{self.com_port_Ecell}')
+        char = ECell("deposition", f'{self.com_port_Ecell}')
         
         while True:
 
@@ -149,7 +149,7 @@ class N9_Workflow:
     
     def remove_depo(self):
         #Declare deposition cell stepper slider
-        depo = ECell("deposition", f'{self.com_port_Ecell}')
+        depo = ECell("characterization", f'{self.com_port_Ecell}')
        
         while True:
 
@@ -166,8 +166,34 @@ class N9_Workflow:
         depo.cell_open()
         time.sleep(5)
         depo.disconnect()
-    
+
+    def run_pstat_depo(self):
+        pstat_run(self.experiment_name, 'depo')
+
+    def run_pstat_char(self):
+        pstat_run(self.experiment_name, 'char')
+
+    def run_pstat_perf(self):
+        pstat_run(self.experiment_name, 'perf')
+
     def auto_deposition(self):
+        #Need to import the Locator table within this function to have access to all of the variables for N9 item positions, can't use * as that is only at the module level
+        #In the future consider wrapping this into a dictionary and assign to a single variable as opposed to importing each individual variable fromt the list
+        from nrc_custom.Locator import WeighScale_Adj
+        from nrc_custom.Locator import Final_loc
+        from nrc_custom.Locator import PipetteRack_LowRow1
+        from nrc_custom.Locator import Avoid_Sliderack
+        from nrc_custom.Locator import WeighScale_Pipette
+        from nrc_custom.Locator import Edep_Cell
+        from nrc_custom.Locator import Avoid_Sliderack
+        from nrc_custom.Locator import PipetteRemover_Preposition
+        from nrc_custom.Locator import PipetteRemover
+        from nrc_custom.Locator import PipetteRemover_Off
+        from nrc_custom.Locator import WeighScale_Adj_Recap
+        from nrc_custom.Locator import Vial_Rack
+
+        p1 = DispenseProcedure(1, 0.5, 1, 0, self.c9)
+        p1.home_carousel_axis()  # Initial homing of the carousel
 
         #Grabs a vial from exp_count position
         self.c9.goto_safe(Vial_Rack[self.exp_count])
@@ -187,9 +213,6 @@ class N9_Workflow:
 
         # TODO - add the update based on the experimental output
         # Below does the carousal and liquid dispensing into a vial
-        
-        p1 = DispenseProcedure(1, 0.5, 1, 0, self.c9)
-        p1.home_carousel_axis()  # Initial homing of the carousel
 
         px = []
         px.append(DispenseProcedure(4, self.dispense_concentration, 1, 0, self.c9))
@@ -197,9 +220,7 @@ class N9_Workflow:
         for dispense_num in range(len(px)):  # must match the above
             print("\n\n*** Pump usage : " + str(dispense_num + 100))
             p1 = px[dispense_num]
-            if X_choice[dispense_num] == 0:
-               pass
-            p1.catalyst_procedure(dispense_num)
+            p1.catalyst_procedure(dispense_num, p1)
             time.sleep(2)
 
         p1.home_carousel_axis()
@@ -241,6 +262,7 @@ class N9_Workflow:
 
         #Dilution with HCl, deposition, washing
         self.c9.set_pump_valve(5,0)
+        self.c9.delay(5)
         self.c9.aspirate_ml(5,9)
         self.c9.delay(5)
         self.c9.set_pump_valve(5,1)
@@ -248,16 +270,17 @@ class N9_Workflow:
         self.c9.dispense_ml(5,9)
         self.c9.delay(5)
         self.c9.set_pump_speed(5,5)
+        self.c9.delay(5)
 
         print("running pulse protocol")
         for pulse_num in range(3):
-            self.c9.aspirate_ml(5, 3)
+            self.c9.aspirate_ml(5,5)
             self.c9.delay(3)
-            self.c9.dispense_ml(5, 3)
+            self.c9.dispense_ml(5,5)
             self.c9.delay(3)
 
-        self.c9.set_pump_speed(5,15)
-        pstat_run(campaign_name, 'depo')
+        self.c9.set_pump_speed(5,10)
+        pstat_run(self.experiment_name, 'depo')
         print("electrodeposition complete")
 
         #Puts deposition solution into waste
@@ -296,7 +319,7 @@ class N9_Workflow:
         self.c9.delay(5)
 
         #open deposition cell
-        self.load_depo()
+        self.remove_depo()
         print("deposition cell open")
 
         #Pipette removal procedures
@@ -317,7 +340,7 @@ class N9_Workflow:
         print("capping")
         self.c9.open_clamp()
         print("returning vial")
-        self.c9.goto_safe(Vial_Rack[ExpNum])
+        self.c9.goto_safe(Vial_Rack[self.exp_count])
         self.c9.open_gripper()
 
         while True:
@@ -335,6 +358,9 @@ class N9_Workflow:
 
     def auto_char(self):
         
+        #code here to load cell
+        self.load_char()
+
         #Fill Characterization Chamber with 0.5 M KHCO3
         self.c9.set_pump_valve(6, 0)
         self.c9.aspirate_ml(6, 12)
@@ -342,30 +368,35 @@ class N9_Workflow:
         self.c9.set_pump_valve(6, 1)
         self.c9.delay(5)
         self.c9.dispense_ml(6, 12)
-        self.c9.delay(5)
+        self.c9.delay(10)
         
         # The following is to turn the flow controller on and off
-        # await self.depo_flow_cont.set_flow_rate(20)
-        # time.sleep(10)
-        # await self.depo_flow_cont.set_flow_rate(0)
-        # await self.depo_flow_cont.close()
-
-        self.c9.set_pump_speed(6, 5)
+        #await self.depo_flow_cont.set_flow_rate(20)
+        #time.sleep(10)
+        #await self.depo_flow_cont.set_flow_rate(0)
+        #await self.depo_flow_cont.close()
+        
+        print("purging resevoir with CO2 for 720s")
+        self.auto_purge()
+        self.c9.delay(5)
+        #there seems to be an error here causing a buffer overload
+        #self.c9.set_pump_speed(6,5)
+        #self.c9.delay(5)
 
         #Pulsing protocol
         print("running pulse protocol")
         for pulse_num in range(3):
-            self.c9.aspirate_ml(6, 3)
-            self.c9.delay(3)
-            self.c9.dispense_ml(6, 3)
-            self.c9.delay(3)
+            self.c9.aspirate_ml(6,3)
+            self.c9.delay(7)
+            self.c9.dispense_ml(6,3)
+            self.c9.delay(7)
 
         self.c9.delay(3)
-        pstat_run(campaign_name,'char')
-        print("ECSA and CA complete")
+        pstat_run(self.experiment_name, 'char')
+        print("ECSA and CO2R complete")
         
-        self.c9.set_pump_speed(6,10)
-        self.c9.delay(5)
+        #self.c9.set_pump_speed(6,10)
+        #self.c9.delay(5)
         
         #Remove solution and home
         self.c9.aspirate_ml(6,12)
@@ -377,29 +408,20 @@ class N9_Workflow:
         self.c9.home_pump(6)
         
         #Human in loop. Remove solution with a dropper and let the cell open
-        print("60s delay to remove remaining solution and open cell remotely")
-        self.c9.delay(60)
-        #work in a cell open and close button for this.
+        self.remove_char()
+        
 
+    #For some reason, the flow controller goes through com 13 rather than com 3. The location of the USB hub.
     async def CO2purge(self):
-        async with FlowController(f'{self.depo_flow_controller_com_port}') as flow_controller:
+        async with FlowController('COM13') as flow_controller:
             print(await flow_controller.get())
             await flow_controller.set_gas('CO2')
-            await flow_controller.set_flow_rate('20.0')
-            await asyncio.sleep(10)
-            await flow_controller.set_flow_rate('0')
+            await flow_controller.set_flow_rate(20.0)
+            await asyncio.sleep(5) #RB changed to 5 seconds to save time
+            await flow_controller.set_flow_rate(0)
             await flow_controller.close()
 
     def auto_purge(self):
         asyncio.run(self.CO2purge())
-    #     #await self.CO2purge()
+        #await self.CO2purge()
     #    pass
-    
-    # def run_workflow():
-    #     N9_workflow.homing_procedure()
-    #     N9_workflow.load_char()
-    #     N9_workflow.auto_deposition()
-    #     N9_workflow.remove_char()
-    #     N9_workflow.load_depo()
-    #     N9_workflow.auto_char()
-    #     N9_workflow.remove_depo()
