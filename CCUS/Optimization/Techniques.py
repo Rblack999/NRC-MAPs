@@ -577,11 +577,11 @@ class Techniques:
                 status = 'STOP' #This should make it go back to the previous value and the unpacking did not occur so using previous values
 
             t = np.append(t, unpacked[0])
-            # print("Time is: " + str(t[-1]))
+            print("Time is: " + str(t[-1]))
             Ewe = np.append(Ewe, unpacked[1])
-            # print("Voltage is: " + str(Ewe[-1]))
+            print("Voltage is: " + str(Ewe[-1]))
             I = np.append(I, unpacked[2])
-            # print("Current is: " + str(I[-1]))
+            print("Current is: " + str(I[-1]))
             cycle = np.append(cycle, unpacked[3])
                 
             # # This is to plot the data as it is generated
@@ -600,14 +600,14 @@ class Techniques:
             # plt.show()
             
             # This is to plot the data as it is generated
-            # if len(t) > 1:
-            #     t_graph.append(t[-1])
-            #     I_graph.append(I[-1])
-            #     plt.plot(t_graph, I_graph)
-            #     plt.xlabel('Time (s)')
-            #     plt.ylabel('I (A)')
-            #     plt.title('exp' + str(self.exp_num) + '_ch' + str(self.channel) + '_' + str(self.tech_num) + '_CA')
-            #     plt.show()
+            if len(t) > 1:
+                t_graph.append(t[-1])
+                I_graph.append(I[-1])
+                plt.plot(t_graph, I_graph)
+                plt.xlabel('Time (s)')
+                plt.ylabel('I (A)')
+                plt.title('exp' + str(self.exp_num) + '_ch' + str(self.channel) + '_' + str(self.tech_num) + '_CA')
+                plt.show()
         
             # This was the GC command to inject after x amount of time on the Agilent        
             # if len(t) > 1 and t[-1] >= 575 and executed == False:

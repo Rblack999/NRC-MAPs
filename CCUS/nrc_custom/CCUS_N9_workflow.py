@@ -8,6 +8,7 @@ import time
 import json
 import asyncio
 from alicat import FlowController
+import pickle
 
 class N9_Workflow: 
     def __init__(self, 
@@ -15,64 +16,90 @@ class N9_Workflow:
                  root_path: str,
                  experiment_name: str,
                  exp_count, 
+                 test,
                  dispense_concentration: float, 
                  com_port_Ecell: str, 
-                 depo_flow_controller_com_port: str):
+                 char_flow_controller_com_port: str):
         
         self.root_path = root_path
         self.experiment_name = experiment_name
         self.exp_count = exp_count
         self.c9 = c9
+        self.test = test
         self.com_port_Ecell = com_port_Ecell
-        self.depo_flow_controller_com_port = depo_flow_controller_com_port
+        self.char_flow_controller_com_port = char_flow_controller_com_port
         self.dispense_concentration = dispense_concentration
+        self.loaded_data = self.load_data()
         
         if type(self.dispense_concentration) != float:
                 raise TypeError('dispense_concentration must be a float')
+    
+    def load_data(self):
+        with open(f'{self.root_path}{self.experiment_name}_saved_data.pkl', 'rb') as file:
+            loaded_data = pickle.load(file)
+            return loaded_data
+
+    def save_data(self):
+        with open(f'{self.root_path}{self.experiment_name}_saved_data.pkl', 'wb') as file:
+            pickle.dump(self.loaded_data, file)
 
     def homing_procedure(self):
 
         #home robot
         print("homing robot")
         self.c9.home_robot()
+        time.sleep(0)
 
         #declare pump 0
         self.c9.pumps[0]['volume'] = 5
-        print("Declare pump0")
         self.c9.home_pump(0)
-        self.c9.delay(5)
-        print("pump0 homed")
+        print("pump 0 homed")
+        time.sleep(0.5)
+        self.c9.set_pump_speed(0, 30)
+        time.sleep(0.5)
+        print("Declare pump0")
+        self.c9.delay(1)
 
         #declare pump 4
-        self.c9.pumps[4]['volume'] = 0.5
-        print("Declare pump4")
         self.c9.home_pump(4)
         self.c9.delay(5)
+        self.c9.pumps[4]['volume'] = 0.5
+        print("Declare pump4")
+        self.c9.delay(1)
+
         print("pump4 homed")
 
         #declare pump 5 (deposition)
-        self.c9.pumps[5]['volume'] = 12
-        print("Declare pump5")
         self.c9.home_pump(5)
         self.c9.delay(5)
+        self.c9.pumps[5]['volume'] = 12.5
+        self.c9.set_pump_speed(5, 15)
+        print("Declare pump5")
         print("pump5 homed")
-
-        #declare pump 7 (Wash)
-        self.c9.pumps[7]['volume'] = 12
-        print("Declare pump7")
-        self.c9.home_pump(7)
-        self.c9.delay(5)
-        print("pump7 homed")
+        self.c9.delay(1)
 
         #declare pump 6 (Characterization)
-        self.c9.pumps[6]['volume'] = 12
-        print("Declare pump6")
         self.c9.home_pump(6)
         self.c9.delay(5)
+        self.c9.pumps[6]['volume'] = 12.5
+        self.c9.set_pump_speed(6, 15)
+        print("Declare pump6")
         print("pump6 homed")
+        self.c9.delay(1)
+
+        #declare pump 7 (Wash)
+        self.c9.home_pump(7)
+        self.c9.delay(5)
+        self.c9.pumps[7]['volume'] = 12.5
+        self.c9.set_pump_speed(7, 15)
+        print("Declare pump7")
+        print("pump7 homed")
+
+
 
         #Fully open the deposition and characterization cell
         self.open_depo()
+        time.sleep(1)
         self.open_char()
     
     def open_depo(self):
@@ -215,7 +242,8 @@ class N9_Workflow:
         # Below does the carousal and liquid dispensing into a vial
 
         px = []
-        px.append(DispenseProcedure(4, self.dispense_concentration, 1, 0, self.c9))
+        #added 0.1 to the dispense concentration which is in ml
+        px.append(DispenseProcedure(4, self.dispense_concentration + 0.1, 1, 0, self.c9))
 
         for dispense_num in range(len(px)):  # must match the above
             print("\n\n*** Pump usage : " + str(dispense_num + 100))
@@ -232,6 +260,10 @@ class N9_Workflow:
         print("deposition cell closed")
         
         #Pipettes from weightscale
+        print("weight before:" + str(self.c9.read_steady_scale()))
+        self.loaded_data[f'{self.experiment_name}'][f'{self.test}']['Depo']['mass_sol_1'] = self.c9.read_steady_scale() #save the mass of total solution
+        #put into data file
+        self.c9.delay(2)
         self.c9.goto_safe(PipetteRack_LowRow1[self.exp_count])  # origin should be PipetteTip_0
         self.c9.delay(5)
         self.c9.goto_safe(Avoid_Sliderack)
@@ -242,53 +274,80 @@ class N9_Workflow:
         
         #injection procedure into deposition chamber
         #No need to change valves. Just aspirate and dispense
+        #changed the amount being aspirated and dispensed to dispense concentration.
         self.c9.set_pump_valve(0,0)
         self.c9.delay(5)
-        self.c9.aspirate_ml(0,1)  # Syringe open. Draws in liquid
-        print("drawing solution")
-        self.c9.delay(5)
-        self.c9.goto_safe(Final_loc)
-        self.c9.delay(2)
-        self.c9.open_clamp()
+        self.c9.aspirate_ml(0,self.dispense_concentration)  # Syringe open. Draws in liquid
+        print("drawing solution" + str(self.dispense_concentration))
         self.c9.delay(2)
         self.c9.goto_safe(Edep_Cell)  # put Edep hole here
-        self.c9.delay(2)
-        self.c9.dispense_ml(0,1)  # Syringe closed
-        print("dispensing solution")
-        self.c9.delay(5)
+        self.c9.delay(1)
+        self.c9.dispense_ml(0,self.dispense_concentration)  # Syringe closed
+        print("dispensing solution" + str(self.dispense_concentration))
+        self.c9.open_clamp()
+        self.c9.delay(1)
+        print("weight after:" + str(self.c9.read_steady_scale()))
+        self.loaded_data[f'{self.experiment_name}'][f'{self.test}']['Depo']['mass_sol_2'] = self.c9.read_steady_scale() #save the mass of solution after being drawn
+        
+        # Save the pickle file
+        self.save_data()
+
+        ####
+        #Below is the old movement, RB updated with the above on Oct 15th. Delete after we know the new code is okay
+        # self.c9.delay(2)
+        # self.c9.goto_safe(Final_loc)
+        # self.c9.delay(1)
+        # self.c9.open_clamp()
+        # self.c9.delay(2)
+        # print("weight after:" + str(self.c9.read_steady_scale()))
+        # self.loaded_data[f'{self.experiment_name}'][f'{self.test}']['Depo']['mass_sol_2'] = self.c9.read_steady_scale() #save the mass of solution after being drawn
+        # self.c9.delay(2)
+        # self.c9.goto_safe(Edep_Cell)  # put Edep hole here
+        # self.c9.delay(2)
+        # self.c9.dispense_ml(0,1)  # Syringe closed
+        # print("dispensing solution" + str(self.dispense_concentration))
+        # self.c9.delay(5)
+        ####
+        
         print("Homing pump")
         self.c9.home_pump(0)
         print("Done injection")
+        self.c9.delay(2)
 
         #Dilution with HCl, deposition, washing
         self.c9.set_pump_valve(5,0)
         self.c9.delay(5)
-        self.c9.aspirate_ml(5,9)
+        self.c9.aspirate_ml(5,10-self.dispense_concentration) # Need to bring the total volume to 10 mL to keep the correct concentration
         self.c9.delay(5)
         self.c9.set_pump_valve(5,1)
         self.c9.delay(5)
-        self.c9.dispense_ml(5,9)
-        self.c9.delay(5)
-        self.c9.set_pump_speed(5,5)
+        self.c9.dispense_ml(5,10-self.dispense_concentration)
         self.c9.delay(5)
 
         print("running pulse protocol")
+        self.c9.set_pump_speed(5, 10)
+        self.c9.delay(1)
         for pulse_num in range(3):
-            self.c9.aspirate_ml(5,5)
-            self.c9.delay(3)
-            self.c9.dispense_ml(5,5)
-            self.c9.delay(3)
+            self.c9.aspirate_ml(5,2)
+            self.c9.delay(2)
+            self.c9.dispense_ml(5,2)
+            self.c9.delay(2)
+        self.c9.set_pump_speed(5, 15)
+        self.c9.delay(1)
 
-        self.c9.set_pump_speed(5,10)
         pstat_run(self.experiment_name, 'depo')
         print("electrodeposition complete")
 
         #Puts deposition solution into waste
-        self.c9.aspirate_ml(7, 12)
-        self.c9.delay(5)
-        self.c9.set_pump_valve(7, 2)
-        self.c9.delay(5)
-        self.c9.dispense_ml(7, 12)
+        #long delays to ensure no pump error. 
+        self.c9.set_pump_speed(7,15)
+        self.c9.delay(1)
+        self.c9.aspirate_ml(7,12.45)
+        self.c9.delay(7)
+        self.c9.set_pump_valve(7,2)
+        self.c9.delay(7)
+        self.c9.dispense_ml(7,12.45)
+        self.c9.delay(2)
 
         print("Wash cycle commencing")
         #7 is wash pump in depo
@@ -296,27 +355,25 @@ class N9_Workflow:
         Wash_Cycle_Done = 3
 
         for Wash_Cycle_Num in range(Wash_Cycle_Done):
-            self.c9.delay(5)
             self.c9.set_pump_valve(7, 0)
-            self.c9.delay(5)
-            self.c9.aspirate_ml(7, 12)
+            self.c9.delay(1)
+            self.c9.aspirate_ml(7, 12.45)
             self.c9.delay(5)
             self.c9.set_pump_valve(7, 1)
+            self.c9.delay(1)
+            self.c9.dispense_ml(7, 12.45)
             self.c9.delay(5)
-            self.c9.dispense_ml(7, 12)
-            self.c9.delay(5)
-            self.c9.aspirate_ml(7, 12)
+            self.c9.aspirate_ml(7, 12.45) #Rob this was 12 before, why an error arose
             self.c9.delay(5)
             self.c9.set_pump_valve(7, 2)
+            self.c9.delay(1)
+            self.c9.dispense_ml(7, 12.45)
             self.c9.delay(5)
-            self.c9.dispense_ml(7, 12)
             Wash_Cycle_Num += 1
-            print("Wash cycle" + str(Wash_Cycle_Num))
+            print("Wash cycle " + str(Wash_Cycle_Num) + ' complete')
 
         Wash_Cycle_Num = 0  # resets the wash cycle number to zero
-        self.c9.delay(5)
-        self.c9.home_pump(7)
-        self.c9.delay(5)
+        self.c9.delay(1)
 
         #open deposition cell
         self.remove_depo()
@@ -363,12 +420,13 @@ class N9_Workflow:
 
         #Fill Characterization Chamber with 0.5 M KHCO3
         self.c9.set_pump_valve(6, 0)
-        self.c9.aspirate_ml(6, 12)
+        self.c9.delay(1)
+        self.c9.aspirate_ml(6, 12.45)
         self.c9.delay(5)
         self.c9.set_pump_valve(6, 1)
         self.c9.delay(5)
-        self.c9.dispense_ml(6, 12)
-        self.c9.delay(10)
+        self.c9.dispense_ml(6, 12.45)
+        self.c9.delay(5)
         
         # The following is to turn the flow controller on and off
         #await self.depo_flow_cont.set_flow_rate(20)
@@ -377,35 +435,31 @@ class N9_Workflow:
         #await self.depo_flow_cont.close()
         
         print("purging resevoir with CO2 for 720s")
-        self.auto_purge()
+        #self.auto_purge()
         self.c9.delay(5)
-        #there seems to be an error here causing a buffer overload
-        #self.c9.set_pump_speed(6,5)
-        #self.c9.delay(5)
 
         #Pulsing protocol
+        self.c9.set_pump_speed(6, 10)
+        self.c9.delay(1)
         print("running pulse protocol")
         for pulse_num in range(3):
-            self.c9.aspirate_ml(6,3)
+            self.c9.aspirate_ml(6,2)
             self.c9.delay(7)
-            self.c9.dispense_ml(6,3)
+            self.c9.dispense_ml(6,2)
             self.c9.delay(7)
 
-        self.c9.delay(3)
+        self.c9.set_pump_speed(6, 20)
+        self.c9.delay(1)
         pstat_run(self.experiment_name, 'char')
         print("ECSA and CO2R complete")
         
-        #self.c9.set_pump_speed(6,10)
-        #self.c9.delay(5)
-        
         #Remove solution and home
-        self.c9.aspirate_ml(6,12)
+        self.c9.aspirate_ml(6,12.45)
         self.c9.delay(5)
         self.c9.set_pump_valve(6,2)
         self.c9.delay(5)
-        self.c9.dispense_ml(6,12)
+        self.c9.dispense_ml(6,12.45)
         self.c9.delay(5)
-        self.c9.home_pump(6)
         
         #Human in loop. Remove solution with a dropper and let the cell open
         self.remove_char()
@@ -413,7 +467,7 @@ class N9_Workflow:
 
     #For some reason, the flow controller goes through com 13 rather than com 3. The location of the USB hub.
     async def CO2purge(self):
-        async with FlowController('COM13') as flow_controller:
+        async with FlowController(f'{self.char_flow_controller_com_port}') as flow_controller:
             print(await flow_controller.get())
             await flow_controller.set_gas('CO2')
             await flow_controller.set_flow_rate(20.0)

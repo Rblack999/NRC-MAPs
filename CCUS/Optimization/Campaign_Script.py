@@ -21,11 +21,11 @@ import nest_asyncio
 nest_asyncio.apply()
 
 # Initial User Variables
-experiment_name = 'awnb1p10061'
-root_path = f'C:/Users/whittingha/Desktop/Potentiostat_API/Campaigns/{experiment_name}/'
+experiment_name = 'rbnb3p105'
+root_path = f'C:/Users/Blackr/Desktop/Automation/Campaigns/{experiment_name}/'
 number_runs = 100 # Input the total number of possible runs 
 test = 'Test_0' # Always keep this as is, is a dummy
-exp_start = 2 # If a new campaign, this = 0. Else, input the exp_count to continue an existing campaign
+exp_start = 0 # If a new campaign, this = 0. Else, input the exp_count to continue an existing campaign
 
 # COM PORTS
 com_port_Ecell = 'COM10'
@@ -48,7 +48,7 @@ exp_count = 0
 dispense_concentration = 0.0
 
 # Homing of everything and instantiation of necessary objects, used some dummy variables for initiatilizatio purposes
-N9_go = N9_Workflow(c9, root_path,experiment_name, exp_count, dispense_concentration, *com_ports_N9)
+N9_go = N9_Workflow(c9, root_path,experiment_name, exp_count, test, dispense_concentration, *com_ports_N9)
 N9_go.homing_procedure()
 
 # The below starts the campaign, pulling in the correct information from the active learning protocol
@@ -87,7 +87,7 @@ for exp_count in range(exp_start,number_runs):
 
         print(f'Initial experiment to run: {X_choice}')
 
-        experiment_update.experiment_update(loaded_data, exp_count, X_choice)
+        experiment_update.experiment_update(exp_count, X_choice)
 
         dispense_concentration = float(X_choice[0])
 
@@ -102,7 +102,7 @@ for exp_count in range(exp_start,number_runs):
 
         print(f'Next experiment to run: {X_choice}')
 
-        experiment_update.experiment_update(loaded_data, exp_count, X_choice)
+        experiment_update.experiment_update(exp_count, X_choice)
 
         dispense_concentration = float(X_choice[0])
 
@@ -120,7 +120,7 @@ for exp_count in range(exp_start,number_runs):
 
     #TODO - input code for automation here
 
-    N9_go = N9_Workflow(c9, root_path,experiment_name,exp_count,dispense_concentration,*com_ports_N9)
+    N9_go = N9_Workflow(c9, root_path,experiment_name,exp_count,test,dispense_concentration,*com_ports_N9)
     N9_go.auto_deposition()
     N9_go.auto_char()
 
@@ -128,7 +128,7 @@ for exp_count in range(exp_start,number_runs):
 
     # Currently the data used is mock data of old excel files
 
-    process_data = PostProcessing(root_path, experiment_name, test = f'Test_{exp_count}')
+    process_data = PostProcessing(root_path, experiment_name, test)
 
     process_data.curate_deposition()
 

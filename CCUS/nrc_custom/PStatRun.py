@@ -695,12 +695,12 @@ def pstat_run(experiment_name, input_procedure):
     # encoding = 'utf-8',
 
     address = "USB0"  # address of the device in use
-    binary_path = "C:\\Users\\whittingha\\Desktop\\Potentiostat_API\\MultiChannel-Potentiostat-Management-Software\\EC_Lab_Development_Package_2022\\EC-Lab Development Package\\"  # address for dev package
+    binary_path =  'C:/Users/Blackr/Desktop/Automation/MultiChannel-Potentiostat-Management-Software/EC_Lab_Development_Package_2022/EC-Lab Development Package/'  # address for dev package
     api, id_, device_info = connect(address, binary_path)  # connect to the device
     
     # The following folder will be the same folder as the .pkl file created during the workflow
     # date_format = date.today().strftime("%Y_%m_%d") # https://www.programiz.com/python-programming/datetime/current-datetime
-    save_loc = f"C:\\Users\\whittingha\\Desktop\\Potentiostat_API\\Campaigns\\{experiment_name}\\" # main folder where the data will be saved
+    save_loc = f'C:/Users/Blackr/Desktop/Automation/Campaigns/{experiment_name}/' # main folder where the data will be saved
     if not os.path.exists(save_loc): # Check if folder exists - if not, make it, else use existing folder
         os.makedirs(save_loc)
     
@@ -708,9 +708,8 @@ def pstat_run(experiment_name, input_procedure):
     # save_loc = "C:\\Users\\nrc-eme-lab\\Desktop\\Automation\MultiChannel-Potentiostat-Management-Software\\Development_Test\\"  
     # main folder where the data will be saved and where master_runs.json and new_run folder are housed
     # Note: subfolders for the individual experiments will be created within the folder defined at save_loc
-
-    new_runs = "C:\\Users\\whittingha\\Desktop\\Potentiostat_API\\MultiChannel-Potentiostat-Management-Software\\Development_Test\\New_Runs"  # this is where the user
-    # places new json files with experiments to run while the program is running
+    new_runs = 'C:/Users/Blackr/Desktop/Automation/MultiChannel-Potentiostat-Management-Software/Development_Test/New_Runs/' 
+    # this is where the user places new json files with experiments to run while the program is running 
 
     sleep_time = 5  # check for new json file experiments every sleep_time seconds
 

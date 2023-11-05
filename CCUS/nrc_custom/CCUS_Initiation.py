@@ -17,12 +17,11 @@ class Campaign_Initiation:
         for exp_count in range(self.number_runs):
             data[f'{self.experiment_name}'][f'Test_{exp_count}'] = {'Depo':{},'Char':{},'Metric':{},'AL':{}}
 
-        # Create the folder if it doesn't exist based on the experiment_name
-        root_path = f'C:/Users/Blackr/Documents/CCUS/MAPs/Initiate/{self.experiment_name}/'
-
         if not os.path.exists(self.root_path): # Check if folder exists - if not, make it, else use existing folder
             os.makedirs(self.root_path)
 
         # # Save the initial pickle file
         with open(f'{self.root_path}{self.experiment_name}_saved_data.pkl', 'wb') as f:
                     pickle.dump(data, f)
+
+        #TODO: Import the .json templates and save them into the folder automatically. They come from the root path before the experiment name
