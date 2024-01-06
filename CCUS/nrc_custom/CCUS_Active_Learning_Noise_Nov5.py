@@ -34,8 +34,6 @@ from botorch.optim import optimize_acqf_discrete
 from botorch.acquisition.monte_carlo import qExpectedImprovement, qUpperConfidenceBound, qNoisyExpectedImprovement
 from botorch.acquisition.analytic import NoisyExpectedImprovement
 from sklearn.preprocessing import StandardScaler, MinMaxScaler
-from scipy.spatial.distance import euclidean
-from scipy.stats.qmc import Sobol
 
 
 class ActiveLearning:
@@ -150,7 +148,7 @@ class ActiveLearning:
         self.loaded_data[f'{self.experiment_name}'][f'Test_{self.exp_count}']['AL']['test_inds']=test_inds
 
         with open(f'{self.root_path}{self.experiment_name}_saved_data.pkl', 'wb') as f:
-            pickle.dump(self.loaded_data, f)
+            pickle.dump(loaded_data, f)
 
     def determine_next_experiment(self):
 
@@ -176,12 +174,13 @@ class ActiveLearning:
         # y in this case is correct to have Test = n because updated with post_processing
         
         # Build an array of all the OP data to use as the y array for the active learning
-        print(f'Model update based on the previous {self.exp_count} tests')
+        print(f'exp_count used is {self.exp_count}')
         y = np.zeros(self.exp_count+1) # Make the initial array of zeroes for size of exp_count (note +1 is needed since exp_count starts at 0)
         for i in range(self.exp_count+1): # WHY DID I DO IT LIKE THIS, IS THIS NEEDED?
             y[i] = np.array([self.loaded_data[f'{self.experiment_name}'][f'Test_{i}']['Metric']['CO_Eff']])
 
         Y_samples = y[:, None] # the data object should be in columns
+        print(Y_samples)
 
         # import the latest X_sample (X_chosen) matrix, note this will also be stored in the previous Test_(n-1)  
         if self.exp_count == 0:
@@ -191,40 +190,40 @@ class ActiveLearning:
         else:
 
             X_samples = np.array(self.loaded_data[f'{self.experiment_name}'][f'Test_{self.exp_count-1}']['AL']['X_sample'])
+
+        # print so can see what composition will be used
+        print(f'Experimental Variables = {X_samples}')
         
         #new_candidate_pool is the pool that we pick the new candidate from
         ### Note right now I have this just set to Test_0 since that is where it is originally stored 
-        total_candidate_pool = self.loaded_data[f'{self.experiment_name}'][f'Test_0']['AL']['X_matrix'] # We need to have this to properly scale the data within the next_points function
-        new_candidate_pool = total_candidate_pool[test_inds] # Have the pool be any point remaining to be selected
+        xx = self.loaded_data[f'{self.experiment_name}'][f'Test_0']['AL']['X_matrix']
+        new_candidate_pool = xx
+        
+        #Scale the data, mean 0 variance 1
+        x_scaler = StandardScaler()
+        y_scaler = StandardScaler()
+        new_candidate_pool_scaled = x_scaler.fit_transform(new_candidate_pool) 
+        Y_scaled = y_scaler.fit_transform(Y_samples)
 
-        init_x = torch.tensor(X_samples)
-        init_y = torch.tensor(Y_samples)
+        #initial train set in tensor, scaling the X_sample'
+        X_samples_scaled = x_scaler.transform(X_samples)
+        init_x = torch.tensor(X_samples_scaled)
+        init_y = torch.tensor(Y_scaled)
 
         #maximum of the sampled dataset
         best_init_y = init_y.max()
         #best_init_y =torch.tensor(init_y.min().item())
 
         # generate next points based on discrete input for acq function 
-        def next_points(init_x, init_y, best_init_y, new_candidate_pool, total_candidate_pool, n_points):
-            
-            # First, we will scale/unscale the data within the function:
-            x_scaler = StandardScaler()
-            y_scaler = StandardScaler()
-            
-            total_candidate_pool_scaled = x_scaler.fit(total_candidate_pool) # ensure do X_scaler first on the original X dataset
-            new_candidate_pool_scaled = torch.tensor(x_scaler.transform(new_candidate_pool)) 
-            init_x_scaled = torch.tensor(x_scaler.transform(init_x)) 
-            init_y_scaled = torch.tensor(y_scaler.fit_transform(init_y))
-
-            
+        def next_points(init_x, init_y, best_init_y, new_candidate_pool_scaled, n_points):
             with gpytorch.settings.cholesky_jitter(1e-6):
             #Gaussian process surrogate model
-                init_var=torch.ones(init_y.shape, dtype=float)*0 #UPDATE THIS FOR CCUS
-                single_model = FixedNoiseGP(init_x_scaled, init_y_scaled, init_var)
+                init_var=torch.ones(init_y.shape, dtype=float)*0.0005 #UPDATE THIS FOR CCUS
+                single_model = FixedNoiseGP(init_x, init_y, init_var)
                 mll= ExactMarginalLogLikelihood(single_model.likelihood, single_model)
                 fit_gpytorch_model(mll)
             #acquisition function
-                NEI = NoisyExpectedImprovement(single_model, init_x_scaled, num_fantasies=100)
+                NEI = NoisyExpectedImprovement(single_model, init_x, num_fantasies=100)
                 # EI = qExpectedImprovement (model = single_model, best_f = best_init_y, maximize=True)
                 # qNEI = qNoisyExpectedImprovement(model = single_model, X_baseline = init_x)
                 # UCB = qUpperConfidenceBound(model = single_model, beta=10)
@@ -232,45 +231,25 @@ class ActiveLearning:
                 candidates , _ = optimize_acqf_discrete(
                             acq_function= NEI, 
                             q=n_points,
-                            choices= new_candidate_pool_scaled,
+                            choices=torch.tensor(new_candidate_pool_scaled),
                             max_batch_size=128,
                             unique=1)
-                
-                # Unscale the candidates
-                candidates_unscaled = x_scaler.inverse_transform(candidates)
-            
-            #save the model checkpoint
-            model_save_path = f'{self.root_path}'
-            os.makedirs(model_save_path, exist_ok=True)
-            
-            model_filename = os.path.join(model_save_path, f'model_checkpoint_Test_{self.exp_count}')
-            
-            torch.save({
-                'iteration': self.exp_count,
-                'model_state_dict': single_model.state_dict(),
-                'train_x_scaled': init_x_scaled,
-                'train_y_scaled': init_y_scaled,
-                'train_x': init_x,
-                'train_y': init_y,
-                'init_var': init_var
-                }, model_filename)
-            
-            return candidates_unscaled
+            return candidates
         
 
         # Now run the optimization
-        print(f"Optimization commencing...")
-        selected_candidates = next_points(init_x, init_y, best_init_y, new_candidate_pool, total_candidate_pool, n_points = 1)
+        print(f"Optimization of: {self.test}")
+        candidates= next_points(init_x, init_y, best_init_y, new_candidate_pool_scaled, 1)
 
         #Unscale the data
-        # candidates_unscaled = x_scaler.inverse_transform(candidates)
-        # X_samples_unscaled = x_scaler.inverse_transform(X_samples_scaled)
+        candidates_unscaled = x_scaler.inverse_transform(candidates)
+        X_samples_unscaled = x_scaler.inverse_transform(X_samples_scaled)
 
         #update the dictionary for the new x selected
-        self.loaded_data[f'{self.experiment_name}'][f'Test_{self.exp_count}']['AL']['X_sample'] = torch.cat((torch.tensor(X_samples),torch.tensor(selected_candidates)),0)
+        self.loaded_data[f'{self.experiment_name}'][f'Test_{self.exp_count}']['AL']['X_sample'] = torch.cat((torch.tensor(X_samples_unscaled),torch.tensor(candidates_unscaled)),0)
         
         # print the new candidate for person to see
-        print(f"New candidate: {selected_candidates}")
+        print(f"New candidate: {candidates_unscaled}")
         
         # Dump the candidate data so that robot can retrieve the file and information for what X composition to make next run
         with open(f'{self.root_path}{self.experiment_name}_saved_data.pkl', 'wb') as f:
@@ -278,8 +257,11 @@ class ActiveLearning:
 
         #to find the closest set of input data from our test set - note that it works when candidates and candidate pool are np.array()
         tolerance = 1e-6 # The tolerance is needed because we are using float numbers and there can be small differences when using them
-        indices = torch.all(torch.abs(total_candidate_pool - selected_candidates) < tolerance, dim=1)
+        indices = torch.all(torch.abs(new_candidate_pool - candidates_unscaled) < tolerance, dim=1)
         index = torch.nonzero(indices).squeeze().tolist()
+
+        # Convert the list of indices to a NumPy array
+        print(f'index is {index}')
    
     # this step is for when the algorithm is stuck to a certain candidate and the new candidate was already studied
     # its like jumping out of a local minimum or maximum
@@ -304,7 +286,7 @@ class ActiveLearning:
         #     # best_init_y =torch.tensor(init_y.max().item())
 
         # else:   
-        print(f"New candidate composition to be added to trainset: {total_candidate_pool[index]}")
+        print(f"New candidates composition to be added to trainset: {xx[index]}")
         #adding the new data point to train set for the next round
         train_inds = np.append(train_inds, index)
         test_inds = [k for k in total_indexes if not k in train_inds]
@@ -316,69 +298,3 @@ class ActiveLearning:
         
         #save the pickle file
         self.save_data()
-
-    def Sobol_sequence(self):
-        # Defining the levels for each feature based on your specifications
-        a1_levels = np.round(np.linspace(0.1, 1, num=5), decimals=1)
-        a2_levels = np.round(np.linspace(-0.5, 0.5, num=11), decimals=1)
-        a3_levels = np.round(np.linspace(5, 60, num=11), decimals=1)
-
-        # Creating a grid of all possible combinations in the discrete space
-        a1_grid, a2_grid, a3_grid = np.meshgrid(a1_levels, a2_levels, a3_levels, indexing='ij')
-        discrete_space = np.column_stack((a1_grid.ravel(), a2_grid.ravel(), a3_grid.ravel()))
-
-        # Function to scale Sobol points to the range of each feature
-        def scale_to_feature_range(point, feature_ranges):
-            scaled_point = []
-            for i, (min_val, max_val) in enumerate(feature_ranges):
-                scaled_value = min_val + point[i] * (max_val - min_val)
-                scaled_point.append(scaled_value)
-            return scaled_point
-
-        # Define the ranges for each feature
-        feature_ranges = [
-            (a1_levels.min(), a1_levels.max()), 
-            (a2_levels.min(), a2_levels.max()), 
-            (a3_levels.min(), a3_levels.max())
-        ]
-
-        # Initializing the Sobol sequence generator
-        sobol_gen = Sobol(d=3, scramble=False)
-
-        # Generating Sobol sequence points (32 points for better coverage)
-        sobol_points = sobol_gen.random_base2(m=5)  # 2^5 = 32 points
-
-        # Scale Sobol points to cover the entire range of each feature
-        scaled_sobol_points = np.array([scale_to_feature_range(point, feature_ranges) for point in sobol_points])
-
-        # Function to find the closest discrete point in the space
-        def find_closest_discrete_point(continuous_point, discrete_space):
-            distances = [euclidean(continuous_point, dp) for dp in discrete_space]
-            return discrete_space[np.argmin(distances)]
-
-        # Selecting closest discrete points
-        selected_experiments = []
-        for point in scaled_sobol_points:
-            closest_point = find_closest_discrete_point(point, discrete_space)
-            if list(closest_point) not in selected_experiments:  # Check for uniqueness
-                selected_experiments.append(list(closest_point))
-
-            if len(selected_experiments) == 10:  # Stop when 10 unique experiments are selected
-                break
-
-        # Ensuring 10 unique experiments
-        while len(selected_experiments) < 10:
-            extra_points = sobol_gen.random(n=10 - len(selected_experiments))
-            extra_scaled_points = np.array([scale_to_feature_range(point, feature_ranges) for point in extra_points])
-            
-            for point in extra_scaled_points:
-                closest_point = find_closest_discrete_point(point, discrete_space)
-                if list(closest_point) not in selected_experiments:  # Check for uniqueness
-                    selected_experiments.append(list(closest_point))
-
-                if len(selected_experiments) == 10:  # Stop when 10 unique experiments are selected
-                    break
-
-        # Displaying the selected experiments
-        for i, exp in enumerate(selected_experiments, 1):
-            print(f"Experiment {i}: {exp}")
