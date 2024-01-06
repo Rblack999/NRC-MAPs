@@ -178,7 +178,7 @@ class ActiveLearning:
         # Build an array of all the OP data to use as the y array for the active learning
         print(f'Model update based on the previous {self.exp_count} tests')
         y = np.zeros(self.exp_count+1) # Make the initial array of zeroes for size of exp_count (note +1 is needed since exp_count starts at 0)
-        for i in range(self.exp_count+1): # WHY DID I DO IT LIKE THIS, IS THIS NEEDED?
+        for i in range(self.exp_count+1): 
             y[i] = np.array([self.loaded_data[f'{self.experiment_name}'][f'Test_{i}']['Metric']['CO_Eff']])
 
         Y_samples = y[:, None] # the data object should be in columns
@@ -211,10 +211,19 @@ class ActiveLearning:
             x_scaler = StandardScaler()
             y_scaler = StandardScaler()
             
-            total_candidate_pool_scaled = x_scaler.fit(total_candidate_pool) # ensure do X_scaler first on the original X dataset
-            new_candidate_pool_scaled = torch.tensor(x_scaler.transform(new_candidate_pool)) 
+            # The scaling must be fit to the training data (init_x) and the same scale applied to the rest of x
+            x_scaler.fit(init_x)
             init_x_scaled = torch.tensor(x_scaler.transform(init_x)) 
+            print(f'std of input = {init_x_scaled.mean()}, {init_x_scaled.std()}')
+            new_candidate_pool_scaled = torch.tensor(x_scaler.transform(new_candidate_pool)) 
+            
+            
+            # scaling on y is its own
+            # NOT, error may occur when running the optimizer re: std not being zero. This will occur when small initial datasets
+            # is used due to each individual value having larger impact on the std. See eg. with a tensor of [[1],[-1]], std = root(2).
+            print(f'init_y = {init_y}')
             init_y_scaled = torch.tensor(y_scaler.fit_transform(init_y))
+            print(f'std of y = {init_y_scaled.mean()},  {init_y_scaled.std()}')
 
             
             with gpytorch.settings.cholesky_jitter(1e-6):
